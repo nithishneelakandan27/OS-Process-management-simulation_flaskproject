@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive CPU Scheduling & Process Management Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-title">
+                <div class="os-icon">⚙️</div>
+                <div>
+                    <h1>CPU Scheduling & Process Management Simulator</h1>
+                    <p class="subtitle">Operating Systems Core Visualization Tool</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btn-preset-1" class="btn btn-secondary">⚡ Load Example 1 (Standard)</button>
+                <button id="btn-preset-2" class="btn btn-secondary">🔄 Load Example 2 (RR Preemption)</button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace-grid">
+            <!-- Left Column: Controls & Process Entry -->
+            <section class="panel input-panel">
+                <div class="panel-header">
+                    <h2>1. Simulation Configuration</h2>
+                </div>
+                
+                <!-- Algorithm Selection -->
+                <div class="control-group">
+                    <label for="algorithm-select">Scheduling Algorithm</label>
+                    <select id="algorithm-select" class="form-control">
+                        <option value="FCFS">First Come First Serve (FCFS)</option>
+                        <option value="SJF">Shortest Job First (SJF - Non-Preemptive)</option>
+                        <option value="PRIORITY">Priority Scheduling (Non-Preemptive)</option>
+                        <option value="RR">Round Robin (RR - Preemptive)</option>
+                    </select>
+                </div>
+
+                <!-- Time Quantum (Shown only for Round Robin) -->
+                <div id="tq-container" class="control-group hidden">
+                    <label for="time-quantum">Time Quantum (units)</label>
+                    <input type="number" id="time-quantum" class="form-control" value="2" min="1" step="1">
+                    <small class="help-text">CPU time slice allocated per process iteration</small>
+                </div>
+
+                <!-- Process Input Table -->
+                <div class="panel-header margin-top">
+                    <h2>2. Process Queue Table</h2>
+                    <button id="btn-add-process" class="btn btn-small btn-success">+ Add Process</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="data-table" id="process-input-table">
+                        <thead>
+                            <tr>
+                                <th>Process ID</th>
+                                <th>Arrival Time</th>
+                                <th>Burst Time</th>
+                                <th>Priority <span class="tooltip-icon" title="Lower number = Higher Priority">(?)</span></th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="process-rows">
+                            <!-- Process rows dynamically injected here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Action Controls -->
+                <div class="action-bar">
+                    <button id="btn-simulate" class="btn btn-primary btn-large">▶ Run Simulation</button>
+                    <button id="btn-clear" class="btn btn-outline">🗑 Clear All</button>
+                </div>
+
+                <!-- Alert Error Message Box -->
+                <div id="error-box" class="alert alert-danger hidden"></div>
+            </section>
+
+            <!-- Right Column: Visualization & Metrics -->
+            <section class="panel viz-panel">
+                <!-- Simulation Playback Controls -->
+                <div class="panel-header">
+                    <h2>3. Execution Visualization</h2>
+                    <div class="playback-controls">
+                        <button id="btn-play" class="btn btn-icon" disabled title="Play Animation">▶</button>
+                        <button id="btn-pause" class="btn btn-icon" disabled title="Pause Animation">⏸</button>
+                        <button id="btn-reset-anim" class="btn btn-icon" disabled title="Reset Step">↺</button>
+                        <label for="speed-slider" class="speed-label">Speed:</label>
+                        <input type="range" id="speed-slider" min="200" max="2000" step="100" value="800" title="Animation Speed">
+                    </div>
+                </div>
+
+                <!-- Gantt Chart Section -->
+                <div class="gantt-section">
+                    <h3>Gantt Chart (CPU Execution Timeline)</h3>
+                    <div id="gantt-container" class="gantt-container">
+                        <div class="placeholder-text">Run a simulation to generate the Gantt chart timeline.</div>
+                    </div>
+                </div>
+
+                <!-- Process State Transition Visualization -->
+                <div class="state-viz-section">
+                    <h3>OS Process State Transitions</h3>
+                    <div class="state-pipeline">
+                        <div class="state-node" id="state-new">
+                            <div class="state-title">New</div>
+                            <div class="state-box" id="box-new"></div>
+                        </div>
+                        <div class="state-arrow">→</div>
+                        <div class="state-node" id="state-ready">
+                            <div class="state-title">Ready Queue</div>
+                            <div class="state-box" id="box-ready"></div>
+                        </div>
+                        <div class="state-arrow">→</div>
+                        <div class="state-node" id="state-running">
+                            <div class="state-title">Running (CPU)</div>
+                            <div class="state-box" id="box-running"></div>
+                        </div>
+                        <div class="state-arrow">→</div>
+                        <div class="state-node" id="state-terminated">
+                            <div class="state-title">Terminated</div>
+                            <div class="state-box" id="box-terminated"></div>
+                        </div>
+                    </div>
+                    <div id="preempt-arrow" class="preempt-indicator hidden">
+                        ↺ Preemption Triggered: Process returned to Ready Queue
+                    </div>
+                </div>
+
+                <!-- Metrics Dashboard -->
+                <div class="panel-header margin-top">
+                    <h2>4. Performance Metrics Dashboard</h2>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <span class="metric-title">Avg Waiting Time</span>
+                        <span class="metric-value" id="val-avg-wt">-</span>
+                        <span class="metric-unit">time units</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Avg Turnaround Time</span>
+                        <span class="metric-value" id="val-avg-tat">-</span>
+                        <span class="metric-unit">time units</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Avg Response Time</span>
+                        <span class="metric-value" id="val-avg-rt">-</span>
+                        <span class="metric-unit">time units</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">CPU Utilization</span>
+                        <span class="metric-value" id="val-cpu-util">-</span>
+                        <span class="metric-unit">%</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Throughput</span>
+                        <span class="metric-value" id="val-throughput">-</span>
+                        <span class="metric-unit">processes / unit time</span>
+                    </div>
+                </div>
+
+                <!-- Detailed Process Results Table -->
+                <div class="panel-header margin-top">
+                    <h2>5. Detailed Process Metrics</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table" id="results-table">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Arrival (AT)</th>
+                                <th>Burst (BT)</th>
+                                <th>Priority</th>
+                                <th>Completion (CT)</th>
+                                <th>Turnaround (TAT)</th>
+                                <th>Waiting (WT)</th>
+                                <th>Response (RT)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-rows">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">No simulation data available</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Event / Simulation Log Terminal -->
+                <div class="panel-header margin-top">
+                    <h2>6. Event / Execution Log</h2>
+                </div>
+                <div class="terminal-log" id="terminal-log">
+                    <div class="log-line system">[SYSTEM] Ready. Select an algorithm and click "Run Simulation".</div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>OS CPU Scheduling & Process Management Simulator • Built for Technical Interviews</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
